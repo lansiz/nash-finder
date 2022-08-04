@@ -6,52 +6,65 @@ import itertools
 
 class Player(object):
     def __init__(self, pure_strategies_num):
+        pure_strategies_num = int(pure_strategies_num)
+        if pure_strategies_num < 2:
+            print(
+                "ERROR: %s cannot be the number of strategies per player"
+                % pure_strategies_num
+            )
+            sys.exit(1)
         self.pure_strategies_num = pure_strategies_num
         self.regret_sum_l = []
         self.path_l = []
         self.payoff_vector = None
 
-    def assign_random_payoff(self, product_space_size, po_min=-1000, po_max=1000):
+    def assign_random_payoff(self, po_min=-1000, po_max=1000):
         pool = np.arange(po_min, po_max)
-        self.payoff_vector = np.random.choice(pool, product_space_size).astype(
-            np.float64
-        )
+        self.payoff_vector = np.random.choice(pool, self.game.product_space_size)
 
-    def assign_payoff(self, product_space_size, combi_index, value):
+    def assign_payoff(self, combi_str, payoff):
         if self.payoff_vector is None:
-            self.payoff_vector = np.zeros(product_space_size).astype(np.float64)
-        self.payoff_vector[combi_index] = value
+            self.payoff_vector = np.zeros(self.game.product_space_size)
+        combi_index = self.game.get_strategy_combination_index(combi_str)
+        self.payoff_vector[combi_index] = payoff
 
-    def vector_update(self, a, b, r):
+    def __vector_update(self, a, b, r):
         a = a + r * b
         a = a / a.sum()  # transform it to point in simplex
-        # a = a / np.linalg.norm(a)  # transform it to unit vector
         return a
 
-    def randomize_mixed_strategy(self, n, str_max=100):
-        """prepare the initial strategies and the str_max parameter
-        decides how 'skew' the prob. proportion is.
-        """
+    def __randomize_mixed_strategy(self, n, str_max=100):
         pool = np.arange(1, str_max)
         str_ = np.random.choice(pool, n)
         str_ = str_ / str_.sum()
         str_ = str_.round(4)
-        str_[0] += 1 - str_.sum()
+        str_[0] += 1 - str_.sum()  # in case the sum doesn't add up to the whole one
         return str_.astype(np.float64)
 
-    def init_mixed_strategies(self):
-        self.mixed_strategy = self.randomize_mixed_strategy(self.pure_strategies_num)
+    def init_mixed_strategies(self, init_strategies=None):
+        if init_strategies is None:
+            self.mixed_strategy = self.__randomize_mixed_strategy(
+                self.pure_strategies_num
+            )
+        else:
+            if len(init_strategies) == self.pure_strategies_num:
+                self.mixed_strategy = np.array(init_strategies).astype(np.float64)
+            else:
+                print(
+                    "Error: player %s with %s pures initialized to %s"
+                    % (self.id, self.pure_strategies_num, init_strategies)
+                )
+                sys.exit(1)
 
-    def run_one_iteration(self, game, rate, player_index):
+    def run_one_iteration(self, rate, player_index):
         """the core of everything
         time complexity: (n-1)g^n multiplications,
         where g is the average of players' pure strategies number
         """
-
         # step 1: evalute vertex payoff vector: \vec{v}
         v = []
         for j in np.arange(self.pure_strategies_num):
-            vertex_prob_dist = game.compute_joint_dist_on_vertex(player_index, j)
+            vertex_prob_dist = self.game.compute_joint_dist_on_vertex(player_index, j)
             a_vertex_payoff = vertex_prob_dist.dot(self.payoff_vector)
             v.append(a_vertex_payoff)
 
@@ -67,7 +80,9 @@ class Player(object):
         self.path_l.append(self.mixed_strategy)
 
         # step 5: update strategies
-        self.mixed_strategy = self.vector_update(self.mixed_strategy, self.regret_vector, rate)
+        self.mixed_strategy = self.__vector_update(
+            self.mixed_strategy, self.regret_vector, rate
+        )
 
 
 class Game(object):
@@ -79,6 +94,8 @@ class Game(object):
 
     def player_join(self, player):
         if self.pure_product_space is None:
+            player.game = self
+            player.id = self.players_num + 1
             self.players.append(player)
             self.players_num += 1
         else:
@@ -86,22 +103,24 @@ class Game(object):
             sys.exit(1)
 
     def player_assign_random_payoff(self):
-        self.build_product_space_of_pures()
+        self.__build_product_space_of_pures()
         for player in self.players:
-            player.assign_random_payoff(len(self.pure_product_space))
+            player.assign_random_payoff()
         print("Payoff functions were randomized")
 
-    def player_assign_payoff(self, player_index, strategies_str, payoff):
-        self.build_product_space_of_pures()
+    def player_assign_payoff(self, player_index, combi_str, payoff):
+        self.__build_product_space_of_pures()
         # player index starts from 0, and hence minus 1
-        the_player = self.players[player_index - 1]
+        player = self.players[player_index - 1]
+        player.assign_payoff(combi_str, payoff)
+
+    def get_strategy_combination_index(self, combi_str):
         # this will be a terrible searching
         for i, combi in enumerate(self.pure_product_space):
             # strategy index starts from 1, and hence add 1
-            strategies_str_2 = "".join(str(x + 1) for x in combi)
-            if strategies_str == strategies_str_2:
-                the_player.assign_payoff(len(self.pure_product_space), i, payoff)
-                break
+            combi_str_inside = "".join(str(x + 1) for x in combi)
+            if combi_str == combi_str_inside:
+                return i
 
     def player_init_mixed_strategies(self, init_strategies=None):
         if init_strategies is None:
@@ -113,41 +132,45 @@ class Game(object):
             # custom
             if len(init_strategies) != self.players_num:
                 print(
-                    "Error: %s players %s initial strategies"
+                    "Error: %s players is given %s initial strategies"
                     % (self.players_num, len(init_strategies))
                 )
                 sys.exit(1)
             for i, player in enumerate(self.players):
-                if len(init_strategies[i]) == player.pure_strategies_num:
-                    player.mixed_strategy = np.array(init_strategies[i])
-                else:
-                    print(
-                        "Error: player %s with %s pures initialized to %s"
-                        % (i + 1, player.pure_strategies_num, init_strategies[i])
-                    )
-                    sys.exit(1)
+                player.init_mixed_strategies(init_strategies[i])
             print("Initial strategies were customized")
 
-    def build_product_space_of_pures(self):
+    def __build_product_space_of_pures(self):
+        """
+        create a list of tuples, each of which is the form of, e.g.
+            ordered (0, 2, 1, ...), where each entry represents the index of pure strategy.
+        each tuple can be seen as a combination of pure strategies.
+        all the tuples in the list form the product space of all players' pure strateges.
+        """
         if self.pure_product_space is not None:
             # product space was built
             return
         temp_l = []
+        if self.players_num < 2:
+            print("ERROR: %s player, no game" % self.players_num)
+            sys.exit(1)
         for player in self.players:
             temp_l.append(set(range(player.pure_strategies_num)))
         self.pure_product_space = list(itertools.product(*temp_l))
+        self.product_space_size = len(self.pure_product_space)
 
     def compute_joint_dist_on_vertex(self, player_index, pure_strategy_index):
         """
-        return the prob dist computed when the player changes its to the one
-        specified in the parameter `pure_strategy_index` in the meantime the other
-        players keep theirs unchanged.
+        return the probability dist, which is computed when
+        1. the player on `player_index` changes the probability to 1 (hence on the "vertex" of simplex)
+            for the pure strategy on `pure_strategy_index`.
+        2. meanwhile, the other players keep theirs unchanged.
         index i: for player
         index j: for pure strategies of player i
         index k: for the combination of pure strategies in `pure_product_space` and `prob_dict`
         time complexity: (n-1)g^(n-1) multiplications
         """
-        prob_dist = np.zeros(len(self.pure_product_space))
+        prob_dist = np.zeros(self.product_space_size)
         for k, combi in enumerate(self.pure_product_space):
             # ignore those combination without `pure_strategy_index` in it,
             # leaving its prob. slot in `prob_dist` to zero
@@ -165,45 +188,32 @@ class Game(object):
             prob_dist[k] = prob
         return prob_dist
 
-    def eqpt(self):
-        eqpts = [p.mixed_strategy for p in self.players]
-        regret_sum = [p.regret_vector for p in self.players]
-        return eqpts, regret_sum
-
-    def regret_sum_aggregation(self):
-        return np.sum([p.regret_vector.sum() for p in self.players])
-
-    def show_eqpt(self, eqpt):
+    def __show_eqpt(self, eqpt):
         regret_sum_l = []
-        print("================== Nash Equilibrium Approximation ==================")
-        for i, (mixed, vgv) in enumerate(zip(eqpt[0], eqpt[1])):
-            regret_sum_l.append(vgv.sum())
+        print(
+            "=========== Nash Equilibrium Approximation: %s iterations ============"
+            % self.iterations
+        )
+        for i, (mixed, regret_vector) in enumerate(zip(eqpt[0], eqpt[1])):
+            regret_sum_l.append(regret_vector.sum())
             print(
                 "Player %s:" % (i + 1),
                 "Nash Eq.",
                 mixed.round(4).tolist(),
                 "Deviation",
-                vgv.round(4).tolist(),
+                regret_vector.round(4).tolist(),
             )
         regret_sum_a = np.array(regret_sum_l).round(4)
         print(
             "Deviation Sum:",
             *regret_sum_a,
-            "Overall Deviation Sum: %s" % np.round(regret_sum_a.sum(), 4)
+            "Overall: %s" % np.round(regret_sum_a.sum(), 4)
         )
-
-    def player_run_one_iteration(self, rate):
-        """time complexity: n(n-1)g^n multiplications
-        multiprocessing would be nice here, supposedly reducing O(n^2g^n) to O(ng^n)
-        """
-
-        for i, player in enumerate(self.players):
-            player.run_one_iteration(self, rate, i)
 
     def plot_2(self):
         # if any player is not using two pure strategies, quit plotting
-        for aplayer in self.players:
-            if np.array(aplayer.path_l).shape[1] != 2:
+        for player in self.players:
+            if np.array(player.path_l).shape[1] != 2:
                 print("ERROR: at least one player is not using TWO pure strategies")
                 sys.exit(1)
 
@@ -216,24 +226,25 @@ class Game(object):
         plt.figure(figsize=(16, 8))
         ax = plt.gca()
 
-        for aplayer in self.players:
-            xy = np.array(aplayer.path_l)
+        for player in self.players:
+            xy = np.array(player.path_l)
             ax.plot(xy[:, 0], alpha=1, zorder=2)
 
         plt.tight_layout()
-        self.get_random_file_name()
+        self.__random_diagram_file_name()
         plt.savefig(self.plot_file_name, bbox_inches="tight", dpi=self.fig_dpi)
         plt.show()
 
-    def barycentric_to_cartesian(self, strategy_a):
+    def __barycentric_to_cartesian(self, strategy_a):
+        """transform simplex on R^3 into a triangle on R^2"""
         barycentric_x = np.array([0, np.sqrt(2) / 2, np.sqrt(2)]).T
         barycentric_y = np.array([0, np.sqrt(6) / 2, 0]).T
         return strategy_a.dot(barycentric_x), strategy_a.dot(barycentric_y)
 
     def plot_3(self):
         # if any player uses less than three pure strategies, quit plotting
-        for aplayer in self.players:
-            if np.array(aplayer.path_l).shape[1] != 3:
+        for player in self.players:
+            if np.array(player.path_l).shape[1] != 3:
                 print("ERROR: at least one player is not using THREE pure strategies")
                 sys.exit(1)
         try:
@@ -256,16 +267,16 @@ class Game(object):
         plt.xlim(0, np.sqrt(2))
         plt.ylim(0, np.sqrt(6) / 2)
 
-        for aplayer in self.players:
-            x_a, y_a = self.barycentric_to_cartesian(np.array(aplayer.path_l))
+        for player in self.players:
+            x_a, y_a = self.__barycentric_to_cartesian(np.array(player.path_l))
             ax.plot(x_a, y_a, alpha=0.5, zorder=2)
 
         plt.tight_layout()
-        self.get_random_file_name()
+        self.__random_diagram_file_name()
         plt.savefig(self.plot_file_name, bbox_inches="tight", dpi=self.fig_dpi)
         plt.show()
 
-    def get_random_file_name(self):
+    def __random_diagram_file_name(self):
         samples = "abcdefghijklmnopqrstuvwxyz"
         samples = samples + samples.upper() + "0123456789"
         self.plot_file_name = "./game_" + "".join(random.sample(samples, 6)) + ".png"
@@ -292,15 +303,25 @@ class Game(object):
                 player.payoff_vector.fill(1000)
 
         # here goes the iteration
-        regret_sum_ag_old = 10**10  # super big number to start with
+        self.iterations = iterations
+        regret_sum_overall_old = 10**10  # super big number to start with
         for _ in range(iterations):
-            self.player_run_one_iteration(rate)
-            regret_sum_ag_cur = self.regret_sum_aggregation()
-            if regret_sum_ag_cur < regret_sum_ag_old:
-                eqpt = self.eqpt()
-                regret_sum_ag_old = regret_sum_ag_cur
+            """time complexity: n(n-1)g^n multiplications
+            multiprocessing would be nice here, supposedly reducing O(n^2g^n) to O(ng^n)
+            """
+            for i, player in enumerate(self.players):
+                player.run_one_iteration(rate, i)
 
-        self.show_eqpt(eqpt)
+            regret_sum_overall_cur = np.sum(
+                [p.regret_vector.sum() for p in self.players]
+            )
+            # if this is a new minimum
+            if regret_sum_overall_cur < regret_sum_overall_old:
+                strategy_path_l = [p.mixed_strategy for p in self.players]
+                regret_sum_l = [p.regret_vector for p in self.players]
+                regret_sum_overall_old = regret_sum_overall_cur
+
+        self.__show_eqpt([strategy_path_l, regret_sum_l])
 
 
 if __name__ == "__main__":
