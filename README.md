@@ -11,6 +11,7 @@ Following are some examples on how to use this program.
 
 ## Example 1: find NE for two-person games
 Usually a two-persons matrix game is defined by the bimatrix, as follows:
+
 ![bimatrix](./docs/bimatrix.png)
 
 [example\_2p.py](./example_2p.py) shows how to convert this bimatrix into Python code,
@@ -63,6 +64,7 @@ In this code, the method is called without any parameter,
 meaning that strategies are initialized randomly.
 
 Running the code with `python example_2p.py`, we will see the following output:
+
 ![bimatrix](./docs/example_2p_output.png)
 
 In this output, we can see the approximate of NE,
@@ -73,6 +75,7 @@ Smaller deviation is better, indicating the approximate is near the true equilib
 ## Example 2: find NE for three-person games
 
 Below is the form of three-person game we see a lot in the textbook. In this game, each player uses two pure strategies.
+
 ![bimatrix](./docs/3p_matrix.png)
 
 Like the two-person game, in [example\_3p.py](./example_3p.py) these two matrices are written as `player_assign_payoff` method calls:
@@ -114,6 +117,7 @@ game.player_assign_payoff(3, "222", 5)
 ```
 
 Running `python example_3p.py`, we have:
+
 ![bimatrix](./docs/example_3p_output.png)
 
 ## Example 3: find NE for any many-person game
@@ -139,17 +143,20 @@ game.run()
 ```
 
 Running `python example_np.py`, we have:
+
 ![bimatrix](./docs/example_np_output.png)
 
 ## Example 4: visulizations of approximation
 For any game where all players use two pure strategies,
 we can call `plot_2()` method to draw the trajectories of strategy approximation.
 For `Example 2`, by running `python example_3p.py`, we have the diagram output:
+
 ![trajectory\_2](./docs/trajectory_2.png)
 
 For any game where all players use three pure strategies,
 we can call `plot_3()` method to draw the trajectories.
 For `Example 1`, by running `python example_2p.py`, we have:
+
 ![trajectory\_2](./docs/trajectory_3.png)
 
 These diagrams show clearly the games coverge torwards NEs.
