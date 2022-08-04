@@ -7,7 +7,7 @@ import itertools
 class Player(object):
     def __init__(self, pure_strategies_num):
         self.pure_strategies_num = pure_strategies_num
-        self.vgs_l = []
+        self.regret_sum_l = []
         self.path_l = []
         self.payoff_vector = None
 
@@ -58,16 +58,16 @@ class Player(object):
         # step 2: compute payoff
         payoff = self.mixed_strategy.dot(v)
 
-        # step 3: compute VGV
+        # step 3: compute regret_vector
         temp = v - payoff
-        self.VGV = np.where(temp > 0, temp, 0)
+        self.regret_vector = np.where(temp > 0, temp, 0)
 
-        # step 4: collect stats: VGS and path
-        self.vgs_l.append(self.VGV.sum())
+        # step 4: collect stats: regret_sum and path
+        self.regret_sum_l.append(self.regret_vector.sum())
         self.path_l.append(self.mixed_strategy)
 
         # step 5: update strategies
-        self.mixed_strategy = self.vector_update(self.mixed_strategy, self.VGV, rate)
+        self.mixed_strategy = self.vector_update(self.mixed_strategy, self.regret_vector, rate)
 
 
 class Game(object):
@@ -167,11 +167,11 @@ class Game(object):
 
     def eqpt(self):
         eqpts = [p.mixed_strategy for p in self.players]
-        vgs = [p.VGV for p in self.players]
-        return eqpts, vgs
+        regret_sum = [p.regret_vector for p in self.players]
+        return eqpts, regret_sum
 
-    def vgs_aggregation(self):
-        return np.sum([p.VGV.sum() for p in self.players])
+    def regret_sum_aggregation(self):
+        return np.sum([p.regret_vector.sum() for p in self.players])
 
     def show_eqpt(self, eqpt):
         regret_sum_l = []
@@ -292,13 +292,13 @@ class Game(object):
                 player.payoff_vector.fill(1000)
 
         # here goes the iteration
-        vgs_ag_old = 10**10  # super big number to start with
+        regret_sum_ag_old = 10**10  # super big number to start with
         for _ in range(iterations):
             self.player_run_one_iteration(rate)
-            vgs_ag_cur = self.vgs_aggregation()
-            if vgs_ag_cur < vgs_ag_old:
+            regret_sum_ag_cur = self.regret_sum_aggregation()
+            if regret_sum_ag_cur < regret_sum_ag_old:
                 eqpt = self.eqpt()
-                vgs_ag_old = vgs_ag_cur
+                regret_sum_ag_old = regret_sum_ag_cur
 
         self.show_eqpt(eqpt)
 
