@@ -1,3 +1,6 @@
+"""
+The implementation is based on the method proposed by https://doi.org/10.1063/5.0012735
+"""
 import numpy as np
 import sys
 import random
@@ -26,7 +29,11 @@ class Player(object):
         if self.payoff_vector is None:
             self.payoff_vector = np.zeros(self.game.product_space_size)
         combi_index = self.game.get_strategy_combination_index(combi_str)
-        self.payoff_vector[combi_index] = payoff
+        if combi_index is not None:
+            self.payoff_vector[combi_index] = payoff
+        else:
+            print("ERORR: combination string %s is wrong" % combi_str)
+            sys.exit(1)
 
     def __vector_update(self, a, b, r):
         a = a + r * b
@@ -56,7 +63,7 @@ class Player(object):
                 )
                 sys.exit(1)
 
-    def run_one_iteration(self, rate, player_index):
+    def run_one_iteration(self, rate):
         """the core of everything
         time complexity: (n-1)g^n multiplications,
         where g is the average of players' pure strategies number
@@ -64,7 +71,7 @@ class Player(object):
         # step 1: evalute vertex payoff vector: \vec{v}
         v = []
         for j in np.arange(self.pure_strategies_num):
-            vertex_prob_dist = self.game.compute_joint_dist_on_vertex(player_index, j)
+            vertex_prob_dist = self.game.compute_joint_dist_on_vertex(self.id - 1, j)
             a_vertex_payoff = vertex_prob_dist.dot(self.payoff_vector)
             v.append(a_vertex_payoff)
 
@@ -188,28 +195,6 @@ class Game(object):
             prob_dist[k] = prob
         return prob_dist
 
-    def __show_eqpt(self, eqpt):
-        regret_sum_l = []
-        print(
-            "=========== Nash Equilibrium Approximation: %s iterations ============"
-            % self.iterations
-        )
-        for i, (mixed, regret_vector) in enumerate(zip(eqpt[0], eqpt[1])):
-            regret_sum_l.append(regret_vector.sum())
-            print(
-                "Player %s:" % (i + 1),
-                "Nash Eq.",
-                mixed.round(4).tolist(),
-                "Deviation",
-                regret_vector.round(4).tolist(),
-            )
-        regret_sum_a = np.array(regret_sum_l).round(4)
-        print(
-            "Deviation Sum:",
-            *regret_sum_a,
-            "Overall: %s" % np.round(regret_sum_a.sum(), 4)
-        )
-
     def plot_2(self):
         # if any player is not using two pure strategies, quit plotting
         for player in self.players:
@@ -269,7 +254,7 @@ class Game(object):
 
         for player in self.players:
             x_a, y_a = self.__barycentric_to_cartesian(np.array(player.path_l))
-            ax.plot(x_a, y_a, alpha=0.5, zorder=2)
+            ax.plot(x_a, y_a, alpha=1, zorder=2)
 
         plt.tight_layout()
         self.__random_diagram_file_name()
@@ -309,8 +294,8 @@ class Game(object):
             """time complexity: n(n-1)g^n multiplications
             multiprocessing would be nice here, supposedly reducing O(n^2g^n) to O(ng^n)
             """
-            for i, player in enumerate(self.players):
-                player.run_one_iteration(rate, i)
+            for player in self.players:
+                player.run_one_iteration(rate)
 
             regret_sum_overall_cur = np.sum(
                 [p.regret_vector.sum() for p in self.players]
@@ -321,7 +306,29 @@ class Game(object):
                 regret_sum_l = [p.regret_vector for p in self.players]
                 regret_sum_overall_old = regret_sum_overall_cur
 
-        self.__show_eqpt([strategy_path_l, regret_sum_l])
+        # output the results
+        temp_l = []
+        print(
+            "=========== Nash Equilibrium Approximation: %s iterations ============"
+            % self.iterations
+        )
+        for i, (mixed_strategy, regret_vector) in enumerate(
+            zip(strategy_path_l, regret_sum_l)
+        ):
+            temp_l.append(regret_vector.sum())
+            print(
+                "Player %s:" % (i + 1),
+                "Nash Eq.",
+                mixed_strategy.round(4).tolist(),
+                "Deviation",
+                regret_vector.round(4).tolist(),
+            )
+        regret_sum_a = np.array(temp_l).round(4)
+        print(
+            "Deviation Sum:",
+            *regret_sum_a,
+            "Overall: %s" % np.round(regret_sum_a.sum(), 4)
+        )
 
 
 if __name__ == "__main__":
