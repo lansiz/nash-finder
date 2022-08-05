@@ -56,7 +56,7 @@ class Player(object):
                 )
                 sys.exit(1)
 
-    def run_one_iteration(self, rate, player_index):
+    def run_one_iteration(self, rate):
         """the core of everything
         time complexity: (n-1)g^n multiplications,
         where g is the average of players' pure strategies number
@@ -64,7 +64,7 @@ class Player(object):
         # step 1: evalute vertex payoff vector: \vec{v}
         v = []
         for j in np.arange(self.pure_strategies_num):
-            vertex_prob_dist = self.game.compute_joint_dist_on_vertex(player_index, j)
+            vertex_prob_dist = self.game.compute_joint_dist_on_vertex(self.id - 1, j)
             a_vertex_payoff = vertex_prob_dist.dot(self.payoff_vector)
             v.append(a_vertex_payoff)
 
@@ -309,8 +309,8 @@ class Game(object):
             """time complexity: n(n-1)g^n multiplications
             multiprocessing would be nice here, supposedly reducing O(n^2g^n) to O(ng^n)
             """
-            for i, player in enumerate(self.players):
-                player.run_one_iteration(rate, i)
+            for player in self.players:
+                player.run_one_iteration(rate)
 
             regret_sum_overall_cur = np.sum(
                 [p.regret_vector.sum() for p in self.players]
