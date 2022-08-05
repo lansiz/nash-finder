@@ -317,10 +317,10 @@ class Game(object):
             )
             # if this is a new minimum
             if regret_sum_overall_cur < regret_sum_overall_old:
-                strategy_path_l = [p.mixed_strategy for p in self.players]
-                regret_sum_l = [p.regret_vector for p in self.players]
                 regret_sum_overall_old = regret_sum_overall_cur
 
+        strategy_path_l = [p.mixed_strategy for p in self.players]
+        regret_sum_l = [p.regret_vector for p in self.players]
         self.__show_eqpt([strategy_path_l, regret_sum_l])
 
 
