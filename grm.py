@@ -26,7 +26,11 @@ class Player(object):
         if self.payoff_vector is None:
             self.payoff_vector = np.zeros(self.game.product_space_size)
         combi_index = self.game.get_strategy_combination_index(combi_str)
-        self.payoff_vector[combi_index] = payoff
+        if combi_index is not None:
+            self.payoff_vector[combi_index] = payoff
+        else:
+            print("ERORR: combination string %s is wrong" % combi_str)
+            sys.exit(1)
 
     def __vector_update(self, a, b, r):
         a = a + r * b
@@ -121,6 +125,7 @@ class Game(object):
             combi_str_inside = "".join(str(x + 1) for x in combi)
             if combi_str == combi_str_inside:
                 return i
+        return None
 
     def player_init_mixed_strategies(self, init_strategies=None):
         if init_strategies is None:
