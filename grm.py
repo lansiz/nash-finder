@@ -20,17 +20,23 @@ class Player(object):
         self.regret_sum_l = []
         self.path_l = []
         self.payoff_vector = None
+        self.payoff_vector_orig = None
 
     def assign_random_payoff(self, po_min=-1000, po_max=1000):
         pool = np.arange(po_min, po_max)
         self.payoff_vector = np.random.choice(pool, self.game.product_space_size)
+        # backup the origin payoff vector for payoff caculation
+        self.payoff_vector_orig = np.copy(self.payoff_vector)
 
     def assign_payoff(self, combi_str, payoff):
         if self.payoff_vector is None:
             self.payoff_vector = np.zeros(self.game.product_space_size)
+            # backup the origin payoff vector for payoff caculation
+            self.payoff_vector_orig = np.zeros(self.game.product_space_size)
         combi_index = self.game.get_strategy_combination_index(combi_str)
         if combi_index is not None:
             self.payoff_vector[combi_index] = payoff
+            self.payoff_vector_orig[combi_index] = payoff
         else:
             print("ERORR: combination string %s is wrong" % combi_str)
             sys.exit(1)
@@ -62,6 +68,15 @@ class Player(object):
                     % (self.id, self.pure_strategies_num, init_strategies)
                 )
                 sys.exit(1)
+
+    def get_payoff(self, mixed_strategy):
+        "caculate payoff on the given mixed"
+        v = []
+        for j in np.arange(self.pure_strategies_num):
+            vertex_prob_dist = self.game.compute_joint_dist_on_vertex(self.id - 1, j)
+            a_vertex_payoff = vertex_prob_dist.dot(self.payoff_vector_orig)
+            v.append(a_vertex_payoff)
+        return mixed_strategy.dot(v)
 
     def run_one_iteration(self, rate):
         """the core of everything
@@ -321,6 +336,8 @@ class Game(object):
                 "Player %s:" % (i + 1),
                 "Nash Eq.",
                 mixed_strategy.round(4).tolist(),
+                "Payoff",
+                round(self.players[i].get_payoff(mixed_strategy), 4),
                 "Deviation",
                 regret_vector.round(4).tolist(),
             )
