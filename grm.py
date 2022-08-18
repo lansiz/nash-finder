@@ -17,10 +17,12 @@ class Player(object):
             )
             sys.exit(1)
         self.pure_strategies_num = pure_strategies_num
-        self.regret_sum_l = []
-        self.path_l = []
         self.payoff_vector = None
         self.payoff_vector_orig = None
+
+    def clear_collected_data(self):
+        self.regret_sum_l = []
+        self.path_l = []
 
     def assign_random_payoff(self, po_min=-1000, po_max=1000):
         pool = np.arange(po_min, po_max)
@@ -289,6 +291,10 @@ class Game(object):
         print("Initial strategies of all %s players:" % self.players_num)
         for _, player in enumerate(self.players):
             print("%s," % player.mixed_strategy.round(4).tolist())
+
+        # clear collected data for new run()
+        for player in self.players:
+            player.clear_collected_data()
 
         # regularize the payoff to [-1000, 1000] for accuracy
         # because payoff matrix X has the same Nash Eq. as aX+b
