@@ -292,6 +292,12 @@ class Game(object):
         for _, player in enumerate(self.players):
             print("%s," % player.mixed_strategy.round(4).tolist())
 
+        self.iterations = iterations
+        print(
+            "=========== Nash Equilibrium Approximation: %s iterations ============"
+            % self.iterations
+        )
+
         # clear collected data for new run()
         for player in self.players:
             player.clear_collected_data()
@@ -310,7 +316,6 @@ class Game(object):
                 player.payoff_vector.fill(1000)
 
         # here goes the iteration
-        self.iterations = iterations
         regret_sum_overall_old = 10**10  # super big number to start with
         for _ in range(iterations):
             """time complexity: n(n-1)g^n multiplications
@@ -322,20 +327,21 @@ class Game(object):
             regret_sum_overall_cur = np.sum(
                 [p.regret_vector.sum() for p in self.players]
             )
-            # if this is a new minimum
+            # if this is a new minimum of overall regret sum
+            # the mixed will be an approximate of NE
             if regret_sum_overall_cur < regret_sum_overall_old:
-                strategy_path_l = [p.mixed_strategy for p in self.players]
-                regret_sum_l = [p.regret_vector for p in self.players]
+                mixed_strategy_l = [p.mixed_strategy for p in self.players]
+                regret_vector_l = [p.regret_vector for p in self.players]
                 regret_sum_overall_old = regret_sum_overall_cur
+
+        # reset players with their mixed at minimum to calculate payoff at approximate
+        for i, player in enumerate(self.players):
+            player.init_mixed_strategies(mixed_strategy_l[i])
 
         # output the results
         temp_l = []
-        print(
-            "=========== Nash Equilibrium Approximation: %s iterations ============"
-            % self.iterations
-        )
         for i, (mixed_strategy, regret_vector) in enumerate(
-            zip(strategy_path_l, regret_sum_l)
+            zip(mixed_strategy_l, regret_vector_l)
         ):
             temp_l.append(regret_vector.sum())
             print(
